@@ -78,7 +78,7 @@ function generate_name($database, $region = ANY, $language = ANY, $gender = ANY)
                 $pool  = $match;
             }
         }
-		
+
         if (!$found) throw new Exception('Region or language not found');
     }
 
@@ -119,6 +119,11 @@ function generate_name($database, $region = ANY, $language = ANY, $gender = ANY)
     $name        = implode(' ', $name_chunks);
     $surname     = implode(' ', $chunks);
 
+    //Update surname to female for SLOVAKIA
+    if ($gender == 'female' && $region == 'slovakia') {
+      $surname = femaleSurname($surname);
+    }
+
     $result = [
         'name'     => $name,
         'surname'  => $surname,
@@ -131,6 +136,40 @@ function generate_name($database, $region = ANY, $language = ANY, $gender = ANY)
     }
 
     return $result;
+}
+
+/**
+ * Function to create female style surname for Slovakia region
+ */
+function femaleSurname($surname)
+{
+  // Rights to add suffix to surname
+  $rights = [
+    'a' => 'ová', 'á' => 'ová',
+    'e' => 'ová',
+    'i' => 'á',
+    'o' => 'ová',
+    'u' => 'ová',
+    'y' => 'á', 'ý' => 'á'
+  ];
+
+  // Last character in surname
+  $vowels = ['a', 'e', 'i', 'o', 'u', 'y', 'á', 'é', 'í', 'ó', 'ú', 'ý'];
+
+  // Look for last character
+  $lastCharacter = substr($surname, -1);
+
+  if (in_array($lastCharacter, $vowels)) {
+    // It last character is vowel then replace it with suffix from rights
+    $surname = substr_replace($surname, '', -1);
+    $lastCharacter = $rights[$lastCharacter];
+  } else {
+    // Esle add suffix
+    // it means last character is consonant instead of vowel
+    $lastCharacter = 'ová';
+  }
+
+  return $surname . $lastCharacter;
 }
 
 $json     = file_get_contents('names.json');
@@ -152,7 +191,7 @@ function send($content, $code = 200) {
     header('Access-Control-Allow-Origin: *');
     header('Access-Control-Allow-Methods: GET');
     http_response_code($code); // use this for PHP <5.4 instead: header("HTTP/1.1 200 OK");
-	
+
     $output = json_encode($content, JSON_UNESCAPED_UNICODE);
 
     // if (!DEBUGGING) ob_end_clean();
@@ -162,37 +201,37 @@ function send($content, $code = 200) {
     } else {
         echo $output;
     }
-	
+
 	// it only counts if names are actually served
 	if ($code == 200) {
-	
+
 		// get old stats
 		$stats = json_decode(file_get_contents('stats.json'));
-		
+
 		// make sure file is not conflicted
 		if (isset($stats->api->calculated)) {
-			
+
 			// update confirmed stats
 			$stats->api->confirmed += isset($content['name']) ? 1 : count($content);
-			
+
 			// a = days since names generated through the api are confirmed
 			// b = days since api is live
 			$time = time();
 			$a = ($time - strtotime('Jan 20, 2016')) / 86400;
 			$b = ($time - strtotime('Oct 17, 2014')) / 86400;
-			
+
 			// determine confirmed generated names
 			$confirmed = $stats->api->confirmed / $a;
-			
+
 			// calculate avg generated names
 			$stats->api->calculated = floor($confirmed * $b);
-			
+
 			// push new stats
 			file_put_contents('stats.json', json_encode($stats));
-		
+
 		}
 	}
-	
+
     exit;
 }
 
@@ -201,7 +240,7 @@ try {
 	if ($amount < 1 || $amount > 500) {
 		throw new Exception('Amount of requested names exceeds maximum allowed');
 	}
-	
+
     while ($count < $amount) {
         $name = generate_name($database, $region, $language, $gender);
         $name_length = iconv_strlen($name['name'] . ' ' . $name['surname']);
